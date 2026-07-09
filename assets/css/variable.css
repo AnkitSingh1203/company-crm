@@ -1,0 +1,25 @@
+:root{
+
+    --primary:#2563eb;
+
+    --dark:#0f172a;
+
+    --white:#ffffff;
+
+    --bg:#f5f7fb;
+
+    --text:#334155;
+
+    --success:#22c55e;
+
+    --danger:#ef4444;
+
+    --warning:#f59e0b;
+
+    --sidebar-width:260px;
+
+    --navbar-height:70px;
+
+    --radius:12px;
+
+}
