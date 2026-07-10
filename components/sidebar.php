@@ -16,21 +16,24 @@
 
     </div>
 
+
     <ul class="menu">
 
-        <li class="active">
-            <a href="#">
+        <li>
+            <a href="../index.php">
                 <i class="fa-solid fa-house"></i>
                 Dashboard
             </a>
         </li>
 
-        <li>
-            <a href="#">
+
+        <li class="active">
+            <a href="index.php">
                 <i class="fa-solid fa-users"></i>
                 Employees
             </a>
         </li>
+
 
         <li>
             <a href="#">
@@ -39,12 +42,14 @@
             </a>
         </li>
 
+
         <li>
             <a href="#">
                 <i class="fa-solid fa-plane-departure"></i>
                 Leave
             </a>
         </li>
+
 
         <li>
             <a href="#">
@@ -53,12 +58,14 @@
             </a>
         </li>
 
+
         <li>
             <a href="#">
                 <i class="fa-solid fa-money-bill-wave"></i>
                 Salary
             </a>
         </li>
+
 
         <li>
             <a href="#">
@@ -67,12 +74,14 @@
             </a>
         </li>
 
+
         <li>
             <a href="#">
                 <i class="fa-solid fa-folder"></i>
                 Documents
             </a>
         </li>
+
 
         <li>
             <a href="#">
@@ -81,6 +90,8 @@
             </a>
         </li>
 
+
     </ul>
+
 
 </div>
