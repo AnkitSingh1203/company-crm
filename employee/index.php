@@ -9,21 +9,75 @@ include "../components/header.php";
 <?php
 
 include "../includes/database.php";
+$search = trim($_GET['search'] ?? '');
 
-$employees = $pdo->query("
+$sql = "
 SELECT
-e.*,
-u.email,
-u.status,
-d.department_name,
-dg.designation_name
+    e.*,
+    u.email,
+    u.status,
+    d.department_name,
+    dg.designation_name
 FROM employees e
 LEFT JOIN users u ON e.user_id = u.id
 LEFT JOIN departments d ON e.department_id = d.id
 LEFT JOIN designations dg ON e.designation_id = dg.id
-ORDER BY e.id DESC
-")->fetchAll();
+";
 
+$countSql = "
+SELECT COUNT(*) 
+FROM employees e
+LEFT JOIN users u ON e.user_id = u.id
+";
+$where = "";
+$params = [];
+
+if ($search != '') {
+
+    $where = " WHERE
+        e.employee_code LIKE ?
+        OR e.first_name LIKE ?
+        OR e.last_name LIKE ?
+        OR CONCAT(e.first_name,' ',e.last_name) LIKE ?
+        OR u.email LIKE ?";
+
+    $keyword = "%{$search}%";
+
+    $params = [
+        $keyword,
+        $keyword,
+        $keyword,
+        $keyword,
+        $keyword
+    ];
+}
+
+$sql .= $where;
+$countSql .= $where;
+
+$limit = 10;
+
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+
+if ($page < 1) {
+    $page = 1;
+}
+
+$offset = ($page - 1) * $limit;
+
+$countStmt = $pdo->prepare($countSql);
+$countStmt->execute($params);
+
+$totalRecords = $countStmt->fetchColumn();
+
+$totalPages = ceil($totalRecords / $limit);
+
+$sql .= " ORDER BY e.id DESC LIMIT $limit OFFSET $offset";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+
+$employees = $stmt->fetchAll();
 ?>
 
 <div class="dashboard">
@@ -55,7 +109,25 @@ ORDER BY e.id DESC
 
             </div>
 
+            <div class="search-bar">
 
+                <form method="GET">
+
+                    <input
+                        type="text"
+                        name="search"
+                        placeholder="Search employee..."
+                        value="<?= htmlspecialchars($search) ?>">
+                    <input type="hidden" name="page" value="1">
+                    <button type="submit">
+
+                        <i class="fa fa-search"></i>
+
+                    </button>
+
+                </form>
+
+            </div>
             <div class="table-container">
 
                 <table class="employee-table">
@@ -123,8 +195,7 @@ ORDER BY e.id DESC
                                         </a>
 
                                         <a href="delete.php?id=<?= $employee['id'] ?>"
-                                            class="action-btn delete"
-                                            onclick="return confirm('Are you sure you want to delete this employee?')">
+                                            class="action-btn delete delete-btn">
                                             <i class="fa-solid fa-trash"></i>
                                         </a>
 
@@ -151,13 +222,75 @@ ORDER BY e.id DESC
 
                 </table>
 
+
+
             </div>
+            <?php if ($totalPages > 1): ?>
+
+                <div class="pagination">
+
+                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+
+                        <a
+                            href="?page=<?= $i ?>&search=<?= urlencode($search) ?>"
+                            class="<?= ($page == $i) ? 'active' : '' ?>">
+
+                            <?= $i ?>
+
+                        </a>
+
+                    <?php endfor; ?>
+
+                </div>
+
+            <?php endif; ?>
+
 
         </div> <!-- content -->
 
     </div> <!-- main -->
 
+
 </div> <!-- dashboard -->
 
 
 <?php include "../components/footer.php"; ?>
+<script>
+    document.querySelectorAll('.delete-btn').forEach(button => {
+
+        button.addEventListener('click', function(e) {
+
+            e.preventDefault();
+
+            let url = this.getAttribute('href');
+
+            Swal.fire({
+
+                title: 'Delete Employee?',
+
+                text: "This action cannot be undone.",
+
+                icon: 'warning',
+
+                showCancelButton: true,
+
+                confirmButtonColor: '#d33',
+
+                cancelButtonColor: '#3085d6',
+
+                confirmButtonText: 'Yes, Delete'
+
+            }).then((result) => {
+
+                if (result.isConfirmed) {
+
+                    window.location.href = url;
+
+                }
+
+            });
+
+        });
+
+    });
+</script>
