@@ -1,0 +1,12 @@
+# Employee uploaded files
+/uploads/
+
+# Local environment
+.env
+
+# IDE / editor files
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db

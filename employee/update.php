@@ -96,10 +96,6 @@ if (empty($phone)) {
 |--------------------------------------------------------------------------
 | Check Email Already Exists
 |--------------------------------------------------------------------------
-|
-| Same employee's current email is allowed.
-| Another employee cannot use this email.
-|
 */
 
 $checkEmail = $pdo->prepare("
@@ -153,6 +149,26 @@ if (!in_array($status, $allowedStatuses, true)) {
 
 /*
 |--------------------------------------------------------------------------
+| Profile Photo Configuration
+|--------------------------------------------------------------------------
+*/
+
+$uploadDirectory = dirname(__DIR__) . DIRECTORY_SEPARATOR . "uploads";
+
+$allowedMimeTypes = [
+    'image/jpeg' => 'jpg',
+    'image/png'  => 'png',
+    'image/webp' => 'webp'
+];
+
+$maxFileSize = 2 * 1024 * 1024; // 2 MB
+
+$newPhotoName = null;
+$newPhotoPath = null;
+$oldPhotoPath = null;
+
+/*
+|--------------------------------------------------------------------------
 | Start Transaction
 |--------------------------------------------------------------------------
 */
@@ -163,62 +179,116 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Profile Photo
+    | Profile Photo Upload
     |--------------------------------------------------------------------------
     */
-
-    $photoName = $employee['profile_photo'];
 
     if (
         isset($_FILES['profile_photo']) &&
         $_FILES['profile_photo']['error'] !== UPLOAD_ERR_NO_FILE
     ) {
 
-        if ($_FILES['profile_photo']['error'] !== UPLOAD_ERR_OK) {
+        $photo = $_FILES['profile_photo'];
+
+        /*
+        |----------------------------------------------------------------------
+        | Upload Error
+        |----------------------------------------------------------------------
+        */
+
+        if ($photo['error'] !== UPLOAD_ERR_OK) {
             throw new Exception("Profile photo upload failed.");
         }
 
-        $extension = strtolower(
-            pathinfo(
-                $_FILES['profile_photo']['name'],
-                PATHINFO_EXTENSION
-            )
-        );
+        /*
+        |----------------------------------------------------------------------
+        | File Size
+        |----------------------------------------------------------------------
+        */
 
-        $allowedExtensions = [
-            'jpg',
-            'jpeg',
-            'png',
-            'gif',
-            'webp'
-        ];
-
-        if (!in_array($extension, $allowedExtensions, true)) {
-            throw new Exception("Invalid profile photo format.");
-        }
-
-        $photoName = time() . "_" . rand(1000, 9999) . "." . $extension;
-
-        $uploadPath = "../uploads/" . $photoName;
-
-        if (!move_uploaded_file(
-            $_FILES['profile_photo']['tmp_name'],
-            $uploadPath
-        )) {
-            throw new Exception("Unable to upload profile photo.");
+        if ($photo['size'] > $maxFileSize) {
+            throw new Exception("Profile photo must be 2 MB or smaller.");
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Delete Old Photo
-        |--------------------------------------------------------------------------
+        |----------------------------------------------------------------------
+        | Validate Actual MIME Type
+        |----------------------------------------------------------------------
         */
 
-        if (
-            !empty($employee['profile_photo']) &&
-            file_exists("../uploads/" . $employee['profile_photo'])
-        ) {
-            unlink("../uploads/" . $employee['profile_photo']);
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->file($photo['tmp_name']);
+
+        if (!isset($allowedMimeTypes[$mimeType])) {
+            throw new Exception(
+                "Invalid profile photo. Only JPG, PNG and WebP images are allowed."
+            );
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | Verify Image Content
+        |----------------------------------------------------------------------
+        */
+
+        if (@getimagesize($photo['tmp_name']) === false) {
+            throw new Exception("Uploaded file is not a valid image.");
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | Create Upload Directory
+        |----------------------------------------------------------------------
+        */
+
+        if (!is_dir($uploadDirectory)) {
+            if (!mkdir($uploadDirectory, 0755, true)) {
+                throw new Exception("Unable to create upload directory.");
+            }
+        }
+
+        if (!is_writable($uploadDirectory)) {
+            throw new Exception("Upload directory is not writable.");
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | Generate Secure Unique Filename
+        |----------------------------------------------------------------------
+        */
+
+        $extension = $allowedMimeTypes[$mimeType];
+
+        $newPhotoName = bin2hex(random_bytes(16)) . "." . $extension;
+
+        $newPhotoPath = $uploadDirectory . DIRECTORY_SEPARATOR . $newPhotoName;
+
+        /*
+        |----------------------------------------------------------------------
+        | Move Uploaded File
+        |----------------------------------------------------------------------
+        */
+
+        if (!move_uploaded_file($photo['tmp_name'], $newPhotoPath)) {
+            throw new Exception("Unable to save profile photo.");
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Determine Photo Value
+    |--------------------------------------------------------------------------
+    */
+
+    $photoName = $employee['profile_photo'];
+
+    if ($newPhotoName !== null) {
+        $photoName = $newPhotoName;
+
+        if (!empty($employee['profile_photo'])) {
+            $oldPhotoPath = $uploadDirectory
+                . DIRECTORY_SEPARATOR
+                . basename($employee['profile_photo']);
         }
     }
 
@@ -284,19 +354,59 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Commit
+    | Commit Database Changes
     |--------------------------------------------------------------------------
     */
 
     $pdo->commit();
 
+    /*
+    |--------------------------------------------------------------------------
+    | Delete Old Photo After Successful Database Update
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $oldPhotoPath !== null &&
+        file_exists($oldPhotoPath) &&
+        is_file($oldPhotoPath)
+    ) {
+        unlink($oldPhotoPath);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Redirect
+    |--------------------------------------------------------------------------
+    */
+
     header("Location: view.php?id=" . $employee_id . "&success=1");
     exit;
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rollback Database
+    |--------------------------------------------------------------------------
+    */
 
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Remove Newly Uploaded File If Database Update Failed
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $newPhotoPath !== null &&
+        file_exists($newPhotoPath) &&
+        is_file($newPhotoPath)
+    ) {
+        unlink($newPhotoPath);
     }
 
     die($e->getMessage());
